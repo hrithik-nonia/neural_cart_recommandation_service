@@ -5,6 +5,8 @@ from app.redis import shared_redis
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from app.kafka.consumer import start_consumer, stop_consumer, consume_events
+import asyncio
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -24,12 +26,19 @@ async def lifespan(app: FastAPI):
     await interactions_collection.create_index("created_at")
     await recommendations_collection.create_index("user_id", unique=True)
     print("✅ Indexes created")
+    
+    # Kafka Consumer
+    await start_consumer()
+    asyncio.create_task(consume_events())
+    print("✅ Kafka Consumer task started")
 
     yield
 
     client.close()
     await shared_redis.aclose()
+    await stop_consumer()
     print("🔴 Connections closed")
+    print("🔴 Kafka Consumer stopped")
 
 
 app = FastAPI(
